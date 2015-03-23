@@ -1,0 +1,144 @@
+---
+title: "Machine writeup"
+author: "Gulraiz Shabbir"
+date: "Sunday, March 22, 2015"
+output: html_document
+---
+
+## Summary
+Here is a prediction algorithm which is approximately 93% accurate. The prediction model used for the purpose is random forest.
+This project will use accelerometer data from six participants to predict their level of performance within the parameters of the collected data. The accelerometer were on the belt, forearm, arm, and dumbell.
+
+
+
+#### Libraries loaded
+
+The following libraries may be used in the project code:
+
+```{r echo=TRUE}
+library(caret)
+library(kernlab)
+library(randomForest)
+library(corrplot)
+library(knitr)
+library(ggplot2)
+
+```
+
+#### Stage1:Loading the data
+
+The data were downloaded from an Amazon cloudfront. The two csv files contain the training and test data, and were put into a directory.
+
+Download the data:
+
+```{r echo=TRUE}
+# Create directory, if it does not exist
+#if (!file.exists("pmlData")) {
+#dir.create("pmlData")
+#}
+
+# Fetch file and save to destination directory
+#fileUrl1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+#fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# Download file from internet
+# add method="curl" if on a mac or linux box
+#download.file(fileUrl1, , destfile = "./pmlData/pml_training.csv")
+#download.file(fileUrl2, , destfile = "./pmlData/pml_testing.csv") 
+#dateDownloaded <- date()
+
+```
+
+Loading the training data:
+
+```{r, echo=TRUE}
+# Read the csv file for initial inspection
+dataPML_Train <- read.csv("./pmlData/pml_training.csv", na.strings= c("NA",""," "))
+
+# clean the data by removing NAs
+dataNARmv <- apply(dataPML_Train, 2, function(x) {sum(is.na(x))})
+dataTrain <- dataPML_Train[,which(dataNARmv == 0)]
+
+# remove identifier columns
+dataTrain <- dataTrain[8:length(dataTrain)]
+
+```
+
+#### Stage2:Predictive Model
+
+The test data set was divided into training and cross validation sets in a 70:30 ratio to train the model and then test it against unfitted data.
+
+```{r echo=TRUE}
+# divide data into training and cross-validation sets
+inTrain <- createDataPartition(y = dataTrain$classe, p = 0.7, list = FALSE)
+training <- dataTrain[inTrain, ]
+crossValid <- dataTrain[-inTrain, ]
+
+```
+
+
+A random forest model was selected to predict the classification. It had methods for error correction in unbalanced data sets. The correlation between any two trees in the forest increases the forest error rate. Therefore, a correllation plot was produced in order to see how strong the variable relationships were.
+
+
+```{r echo=TRUE}
+# plot the correlation matrix
+corMatrix <- cor(training[, -length(training)])
+corrplot(corMatrix, order = "FPC", method = "circle", type = "lower", tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+
+qplot(magnet_forearm_z,classe,data=training)
+```
+
+
+In this type of plot the dark red and blue colours represent a high negative and positive relationship, respectively, between the variables. Highly correlated predictors are fine, so they may all be included in the model.
+
+A model was then fitted with the outcome set of the training class and all other variables were used in the prediction.
+
+
+```{r echo=TRUE}
+# fit a model to predict the classe using everything a predictor
+model <- randomForest(classe ~ ., data = training)
+model
+
+```
+
+
+The model produced an OOB error rate of .56%. This was considered to be acceptable, therefore the model was applied to the test data.
+
+
+#### Stage3: Cross-Validation
+
+The model was used to classify the remaining 30% of data. The results were output to a confusion matrix, and included the actual classifications to ascertain model accuracy.
+
+```{r echo=TRUE}
+# test the model using the remaining 30% of data
+predictXValid <- predict(model, crossValid)
+confusionMatrix(crossValid$classe, predictXValid)
+
+```
+
+The model accuracy was 99.3%. This model can now be used to predict new data.
+
+
+####Stage4:Predictions
+
+A separate data set was then loaded into R and cleaned in the same manner as before. The model was then used to predict the classifications of the 20 results of this new data.
+
+
+```{r echo=TRUE}
+# apply the same treatment to the final testing data
+dataPML_Test <- read.csv("./pmlData/pml_testing.csv", na.strings= c("NA",""," "))
+dataTestNArmv <- apply(dataPML_Test, 2, function(x) {sum(is.na(x))})
+dataTest <- dataPML_Test[,which(dataTestNArmv == 0)]
+dataTest <- dataTest[8:length(dataTest)]
+
+# predict the classes of the test set
+predictTest <- predict(model, dataTest)
+predictTest
+
+```
+
+
+#### Ending
+
+With the abundance of data provided from multiple measurement sources, it is possible to accurately predict, within reason, how well a person is preforming an excercise using a relatively simple model.
+
